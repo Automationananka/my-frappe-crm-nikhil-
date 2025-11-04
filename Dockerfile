@@ -10,3 +10,11 @@ FROM frappe/erpnext:${ERPNEXT_VERSION}
 EXPOSE 8000
 
 # The image's default command will run the server
+
+#
+# --- !! ADD THIS LINE !! ---
+#
+# This overrides the "USER frappe" from the base image
+# so the start command runs as root, which is needed
+# to fix volume permissions on Railway.
+USER root
