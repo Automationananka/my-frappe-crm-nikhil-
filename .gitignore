@@ -1,0 +1,25 @@
+# Python / env
+frappe-bench/env/
+venv/
+.env
+*.pyc
+__pycache__/
+
+# Frappe site data (do NOT commit sites with private keys)
+frappe-bench/sites/
+
+# Node / build
+node_modules/
+build/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Editor files
+.vscode/
+.idea/
