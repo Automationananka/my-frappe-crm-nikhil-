@@ -29,6 +29,7 @@ DB_PASSWORD=${MYSQLPASSWORD:-${DB_PASSWORD}}
 echo "--- Waiting for MySQL to be reachable ---"
 MAX_RETRIES=30
 RETRY_COUNT=0
+
 while ! nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
     RETRY_COUNT=$((RETRY_COUNT + 1))
     if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
