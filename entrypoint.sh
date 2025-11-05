@@ -1,0 +1,40 @@
+#!/bin/bash
+# This is the final, corrected entrypoint script
+
+# Exit immediately if any command fails
+set -e
+
+echo "--- Entrypoint: Installing dependencies ---"
+apt-get update && apt-get install -y mariadb-client redis-tools
+
+echo "--- Entrypoint: Waiting for MariaDB (as root)... ---"
+until mysqladmin ping -h${DB_HOST} -uroot -p${MARIADB_MYSQLROOTPASSWORD} --silent; do
+    echo "...maria sleeping 5s..."
+    sleep 5
+done
+
+echo "--- Entrypoint: Waiting for Redis Cache... ---"
+until redis-cli -u ${REDIS_CACHE} ping; do
+    echo "...redis-cache sleeping 5s..."
+    sleep 5
+done
+
+echo "--- Entrypoint: Waiting for Redis Queue... ---"
+until redis-cli -u ${REDIS_QUEUE} ping; do
+    echo "...redis-queue sleeping 5s..."
+    sleep 5
+done
+
+echo "--- Entrypoint: ALL SERVICES READY! Recreating apps.txt... ---"
+cd /home/frappe/frappe-bench
+rm -f sites/apps.txt
+(echo 'frappe' > sites/apps.txt && echo 'erpnext' >> sites/apps.txt)
+
+echo "--- Entrypoint: Changing permissions... ---"
+chown -R frappe:frappe /home/frappe/frappe-bench/sites
+
+echo "--- Entrypoint: Switching to frappe user to run installation... ---"
+# Use 'exec' to hand over control to the final command
+exec su - frappe -c "cd /home/frappe/frappe-bench && \
+    bench new-site ${SITE_NAME} --no-mariadb-socket --db-name ${DB_NAME} --db-user ${DB_USER} --db-password ${DB_PASSWORD} --mariadb-root-username root --mariadb-root-password ${MARIADB_MYSQLROOTPASSWORD} --db-host ${DB_HOST} --install-app erpnext --admin-password ${ADMIN_PASSWORD} --force && \
+    bench start"
