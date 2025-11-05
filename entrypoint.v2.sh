@@ -36,14 +36,14 @@ chown -R frappe:frappe /home/frappe/frappe-bench/sites
 echo "--- Entrypoint v2: Switching to frappe user to run installation... ---"
 # Use 'exec' to hand over control to the final command
 exec su - frappe -c "cd /home/frappe/frappe-bench && \
-    bench new-site ${SITE_NAME} \
+    bench new-site \"${SITE_NAME}\" \
     --db-type mariadb \
-    --db-name ${DB_NAME} \
-    --db-root-username ${DB_USER} \
-    --db-root-password ${MARIADB_ROOT_PASSWORD} \
-    --db-host ${DB_HOST} \
+    --db-name \"${DB_NAME}\" \
+    --db-root-username \"${DB_USER}\" \
+    --db-root-password \"${DB_PASSWORD}\" \
+    --db-host \"${DB_HOST}\" \
     --mariadb-user-host-login-scope='%' \
-    --admin-password ${ADMIN_PASSWORD} \
+    --admin-password \"${ADMIN_PASSWORD}\" \
     --install-app erpnext \
     --force && \
     bench start"
