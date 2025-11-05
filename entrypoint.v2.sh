@@ -72,6 +72,11 @@ else
     exit 1
 fi
 
+# Ensure database exists
+echo "--- Ensuring database exists ---"
+mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1
+echo "✅ Database ${DB_NAME} ready!"
+
 # Wait for Redis services
 for redis_var in REDIS_CACHE REDIS_QUEUE REDIS_SOCKETIO; do
     redis_url="${!redis_var}"
