@@ -42,7 +42,7 @@ echo "✅ MySQL is reachable!"
 
 # Verify DB connection
 echo "--- Testing MySQL connection ---"
-if mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" --connect-timeout=5 -e "SELECT 1" &>/dev/null; then
+if mysql -h"${MYSQLHOST:-${DB_HOST}}" -P"${MYSQLPORT:-${DB_PORT:-3306}}" -u"${MYSQLUSER:-${DB_USER}}" -p"${MYSQLPASSWORD:-${DB_PASSWORD}}" --connect-timeout=5 -e "SELECT 1" &>/dev/null; then
     echo "✅ MySQL connection verified!"
 else
     echo "❌ MySQL connection failed. Check MYSQLUSER and MYSQLPASSWORD."
