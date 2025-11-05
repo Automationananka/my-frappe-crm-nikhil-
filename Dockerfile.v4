@@ -1,5 +1,5 @@
 # CACHE_BUSTER=v11 - This comment forces a rebuild
-ARG CACHE_BUSTER=v11
+ARG CACHE_BUSTER=v12
 
 # --- Dockerfile for ERPNext on Railway ---
 ARG ERPNEXT_VERSION=v15
