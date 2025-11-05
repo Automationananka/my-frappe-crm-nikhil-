@@ -1,20 +1,21 @@
 # --- Dockerfile for ERPNext on Railway ---
+# Cache buster v2
+ARG CACHE_BUSTER=v2
 
-# Start from the official ERPNext image
-# This image already includes both 'frappe' and 'erpnext'
-# We use v15 to match the base Frappe version
 ARG ERPNEXT_VERSION=v15
 FROM frappe/erpnext:${ERPNEXT_VERSION}
 
-# Expose the default port for Railway
+# Switch to root to copy files and set permissions
+USER root
+
+# Copy our entrypoint script into the container
+COPY entrypoint.sh /entrypoint.sh
+
+# Make the script executable
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 8000
 
-# The image's default command will run the server
-
-#
-# --- !! ADD THIS LINE !! ---
-#
-# This overrides the "USER frappe" from the base image
-# so the start command runs as root, which is needed
-# to fix volume permissions on Railway.
+# We stay as root because the entrypoint.sh 
+# needs root permissions to run apt-get and chown
 USER root
