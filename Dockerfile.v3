@@ -1,7 +1,7 @@
 # CACHE_BUSTER=v6 - This comment forces a rebuild
 
 # --- Dockerfile for ERPNext on Railway ---
-ARG CACHE_BUSTER=v6
+ARG CACHE_BUSTER=v8
 
 ARG ERPNEXT_VERSION=v15
 FROM frappe/erpnext:${ERPNEXT_VERSION}
