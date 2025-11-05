@@ -1,23 +1,23 @@
-# CACHE_BUSTER=v11 - This comment forces a rebuild
-ARG CACHE_BUSTER=v12
-
-# --- Dockerfile for ERPNext on Railway ---
+# Dockerfile for ERPNext on Railway with MySQL
+ARG CACHE_BUSTER=v14
 ARG ERPNEXT_VERSION=v15
-FROM frappe/erpnext:v15
 
-# Switch to root
+FROM frappe/erpnext:${ERPNEXT_VERSION}
+
+# Switch to root for installation
 USER root
 
-# This new RUN command will force the cache to break
-RUN echo "--- Forcing a rebuild v11 ---"
+# Force cache bust
+RUN echo "--- Forcing rebuild ${CACHE_BUSTER} ---"
 
-# Copy our NEW entrypoint script
+# Copy the fixed entrypoint script
 COPY entrypoint.v2.sh /entrypoint.v2.sh
 
-# Make the script executable
+# Make it executable
 RUN chmod +x /entrypoint.v2.sh
 
+# Expose port
 EXPOSE 8000
 
-# We stay as root
-USER root
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.v2.sh"]
