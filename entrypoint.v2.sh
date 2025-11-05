@@ -7,7 +7,7 @@ echo "=============================================="
 
 # Install dependencies
 echo "--- Installing dependencies ---"
-apt-get update && apt-get install -y mysql-client redis-tools netcat-openbsd
+apt-get update && apt-get install -y default-mysql-client redis-tools netcat-openbsd
 
 echo "=============================================="
 echo "🔍 Environment Variables:"
