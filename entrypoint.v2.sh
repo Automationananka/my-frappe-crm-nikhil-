@@ -11,11 +11,11 @@ apt-get update && apt-get install -y default-mysql-client redis-tools netcat-ope
 
 echo "=============================================="
 echo "🔍 Environment Variables:"
-echo "SITE_NAME        = ${SITE_NAME}"
-echo "DB_HOST          = ${MYSQLHOST}"
-echo "DB_PORT          = ${MYSQLPORT:-3306}"
-echo "DB_NAME          = ${MYSQLDATABASE}"
-echo "DB_USER          = ${MYSQLUSER}"
+echo SITE_NAME=erpnext-production-6e19.up.railway.app
+echo DB_HOST=mariadb.railway.internal
+echo DB_PORT=3306
+echo DB_NAME=erpnext
+echo DB_USER=erpnext_user
 echo "=============================================="
 
 # Assign DB variables
