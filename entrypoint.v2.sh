@@ -1,5 +1,5 @@
 #!/bin/bash
-# Entrypoint v6 - Railway Production with MySQL
+# Entrypoint v7 - Railway Production with MySQL (FIXED)
 set -e
 
 echo "🚀 Starting Frappe/ERPNext setup on Railway (MySQL version)..."
@@ -10,26 +10,40 @@ echo "--- Installing dependencies ---"
 apt-get update && apt-get install -y default-mysql-client redis-tools netcat-openbsd
 
 echo "=============================================="
-echo "🔍 Environment Variables:"
-echo SITE_NAME=erpnext-production-6e19.up.railway.app
-echo DB_HOST=mariadb.railway.internal
-echo DB_PORT=3306
-echo DB_NAME=erpnext
-echo DB_USER=erpnext_user
+
+# CRITICAL FIX: Assign Railway MySQL variables directly (no fallbacks yet)
+# Railway provides MYSQLHOST, MYSQLPORT, MYSQLDATABASE, MYSQLUSER, MYSQLPASSWORD
+DB_HOST="${MYSQLHOST}"
+DB_PORT="${MYSQLPORT:-3306}"
+DB_NAME="${MYSQLDATABASE}"
+DB_USER="${MYSQLUSER}"
+DB_PASSWORD="${MYSQLPASSWORD}"
+SITE_NAME="${SITE_NAME:-erpnext.localhost}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+
+echo "🔍 Environment Variables (After Assignment):"
+echo "SITE_NAME=${SITE_NAME}"
+echo "DB_HOST=${DB_HOST}"
+echo "DB_PORT=${DB_PORT}"
+echo "DB_NAME=${DB_NAME}"
+echo "DB_USER=${DB_USER}"
+echo "DB_PASSWORD=${DB_PASSWORD:+***SET***}"
 echo "=============================================="
 
-# Assign DB variables (use DB_* vars if MYSQL* vars don't exist)
-DB_HOST=${MYSQLHOST:-${DB_HOST}}
-DB_PORT=${MYSQLPORT:-${DB_PORT:-3306}}
-DB_NAME=${MYSQLDATABASE:-${DB_NAME}}
-DB_USER=${MYSQLUSER:-${DB_USER}}
-DB_PASSWORD=${MYSQLPASSWORD:-${DB_PASSWORD}}
+# Validate required variables
+if [ -z "${DB_HOST}" ] || [ -z "${DB_USER}" ] || [ -z "${DB_PASSWORD}" ] || [ -z "${DB_NAME}" ]; then
+    echo "❌ ERROR: Missing required MySQL environment variables!"
+    echo "DB_HOST: ${DB_HOST:-NOT SET}"
+    echo "DB_USER: ${DB_USER:-NOT SET}"
+    echo "DB_PASSWORD: ${DB_PASSWORD:+SET}${DB_PASSWORD:-NOT SET}"
+    echo "DB_NAME: ${DB_NAME:-NOT SET}"
+    exit 1
+fi
 
 # Wait for MySQL
 echo "--- Waiting for MySQL to be reachable ---"
 MAX_RETRIES=30
 RETRY_COUNT=0
-
 while ! nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
     RETRY_COUNT=$((RETRY_COUNT + 1))
     if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
@@ -43,19 +57,34 @@ echo "✅ MySQL is reachable!"
 
 # Verify DB connection
 echo "--- Testing MySQL connection ---"
-if mysql -h"${MYSQLHOST:-${DB_HOST}}" -P"${MYSQLPORT:-${DB_PORT:-3306}}" -u"${MYSQLUSER:-${DB_USER}}" -p"${MYSQLPASSWORD:-${DB_PASSWORD}}" --connect-timeout=5 -e "SELECT 1" &>/dev/null; then
+if mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" --connect-timeout=10 -e "SELECT 1;" 2>/dev/null; then
     echo "✅ MySQL connection verified!"
 else
-    echo "❌ MySQL connection failed. Check MYSQLUSER and MYSQLPASSWORD."
+    echo "❌ MySQL connection failed!"
+    echo "Connection details:"
+    echo "  Host: ${DB_HOST}"
+    echo "  Port: ${DB_PORT}"
+    echo "  User: ${DB_USER}"
+    echo "  Database: ${DB_NAME}"
+    echo ""
+    echo "Testing with verbose error output:"
+    mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT 1;" 2>&1 || true
     exit 1
 fi
 
-# Wait for Redis
+# Wait for Redis services
 for redis_var in REDIS_CACHE REDIS_QUEUE REDIS_SOCKETIO; do
     redis_url="${!redis_var}"
     echo "--- Waiting for $redis_var ---"
+    MAX_REDIS_RETRIES=30
+    REDIS_RETRY=0
     until redis-cli -u "${redis_url}" ping 2>/dev/null | grep -q PONG; do
-        echo "... waiting for ${redis_var} ..."
+        REDIS_RETRY=$((REDIS_RETRY + 1))
+        if [ $REDIS_RETRY -ge $MAX_REDIS_RETRIES ]; then
+            echo "❌ ${redis_var} not reachable after $MAX_REDIS_RETRIES attempts"
+            exit 1
+        fi
+        echo "... waiting for ${redis_var} (attempt $REDIS_RETRY/$MAX_REDIS_RETRIES) ..."
         sleep 2
     done
     echo "✅ ${redis_var} ready!"
