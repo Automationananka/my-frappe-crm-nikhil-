@@ -8,9 +8,6 @@ echo "--- Entrypoint: Installing dependencies ---"
 apt-get update && apt-get install -y mariadb-client redis-tools
 
 echo "--- Entrypoint: Waiting for MariaDB (as root)... ---"
-#
-# --- THIS LINE IS CORRECTED: It uses the full password variable ---
-#
 until mysqladmin ping -h${DB_HOST} -uroot -p${MARIADB_MYSQLROOTPASSWORD} --silent; do
     echo "...maria sleeping 5s..."
     sleep 5
@@ -38,9 +35,6 @@ chown -R frappe:frappe /home/frappe/frappe-bench/sites
 
 echo "--- Entrypoint: Switching to frappe user to run installation... ---"
 # Use 'exec' to hand over control to the final command
-#
-# --- THIS LINE IS CORRECTED: It uses the correct --mariadb-root-username options ---
-#
 exec su - frappe -c "cd /home/frappe/frappe-bench && \
     bench new-site ${SITE_NAME} --no-mariadb-socket --db-name ${DB_NAME} --db-user ${DB_USER} --db-password ${DB_PASSWORD} --mariadb-root-username root --mariadb-root-password ${MARIADB_MYSQLROOTPASSWORD} --db-host ${DB_HOST} --install-app erpnext --admin-password ${ADMIN_PASSWORD} --force && \
     bench start"
