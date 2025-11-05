@@ -18,12 +18,12 @@ echo DB_NAME=erpnext
 echo DB_USER=erpnext_user
 echo "=============================================="
 
-# Assign DB variables
-DB_HOST=${MYSQLHOST}
-DB_PORT=${MYSQLPORT:-3306}
-DB_NAME=${MYSQLDATABASE}
-DB_USER=${MYSQLUSER}
-DB_PASSWORD=${MYSQLPASSWORD}
+# Assign DB variables (use DB_* vars if MYSQL* vars don't exist)
+DB_HOST=${MYSQLHOST:-${DB_HOST}}
+DB_PORT=${MYSQLPORT:-${DB_PORT:-3306}}
+DB_NAME=${MYSQLDATABASE:-${DB_NAME}}
+DB_USER=${MYSQLUSER:-${DB_USER}}
+DB_PASSWORD=${MYSQLPASSWORD:-${DB_PASSWORD}}
 
 # Wait for MySQL
 echo "--- Waiting for MySQL to be reachable ---"
