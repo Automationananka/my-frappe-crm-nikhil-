@@ -1,13 +1,15 @@
-# CACHE_BUSTER=v6 - This comment forces a rebuild
+# CACHE_BUSTER=v8 - This comment forces a rebuild
+ARG CACHE_BUSTER=v9
 
 # --- Dockerfile for ERPNext on Railway ---
-ARG CACHE_BUSTER=v8
-
 ARG ERPNEXT_VERSION=v15
-FROM frappe/erpnext:${ERPNEXT_VERSION}
+FROM frappe/erpnext:v15
 
-# Switch to root to copy files and set permissions
+# Switch to root
 USER root
+
+# This new RUN command will force the cache to break
+RUN echo "--- Forcing a rebuild to copy entrypoint ---"
 
 # Copy our entrypoint script into the container
 COPY entrypoint.sh /entrypoint.sh
