@@ -1,18 +1,11 @@
 #!/bin/bash
-# Entrypoint v7 - Railway Production with MySQL (FIXED)
+# Entrypoint for Railway Production with MySQL
 set -e
 
-echo "🚀 Starting Frappe/ERPNext setup on Railway (MySQL version)..."
+echo "🚀 Starting Frappe/ERPNext on Railway..."
 echo "=============================================="
 
-# Install dependencies
-echo "--- Installing dependencies ---"
-apt-get update && apt-get install -y default-mysql-client redis-tools netcat-openbsd
-
-echo "=============================================="
-
-# CRITICAL FIX: Assign Railway MySQL variables directly (no fallbacks yet)
-# Railway provides MYSQLHOST, MYSQLPORT, MYSQLDATABASE, MYSQLUSER, MYSQLPASSWORD
+# Environment Variables from Railway
 DB_HOST="${MYSQLHOST}"
 DB_PORT="${MYSQLPORT:-3306}"
 DB_NAME="${MYSQLDATABASE}"
@@ -21,28 +14,39 @@ DB_PASSWORD="${MYSQLPASSWORD}"
 SITE_NAME="${SITE_NAME:-erpnext.localhost}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 
-echo "🔍 Environment Variables (After Assignment):"
-echo "SITE_NAME=${SITE_NAME}"
-echo "DB_HOST=${DB_HOST}"
-echo "DB_PORT=${DB_PORT}"
-echo "DB_NAME=${DB_NAME}"
-echo "DB_USER=${DB_USER}"
-echo "DB_PASSWORD=${DB_PASSWORD:+***SET***}"
+# Redis URLs
+REDIS_CACHE_URL="${REDIS_CACHE}"
+REDIS_QUEUE_URL="${REDIS_QUEUE}"
+REDIS_SOCKETIO_URL="${REDIS_SOCKETIO:-$REDIS_CACHE}"
+
+echo "🔍 Configuration:"
+echo "SITE_NAME: ${SITE_NAME}"
+echo "DB_HOST: ${DB_HOST}"
+echo "DB_PORT: ${DB_PORT}"
+echo "DB_NAME: ${DB_NAME}"
+echo "DB_USER: ${DB_USER}"
+echo "DB_PASSWORD: ${DB_PASSWORD:+***SET***}"
+echo "REDIS_CACHE: ${REDIS_CACHE_URL:+***SET***}"
+echo "REDIS_QUEUE: ${REDIS_QUEUE_URL:+***SET***}"
+echo "REDIS_SOCKETIO: ${REDIS_SOCKETIO_URL:+***SET***}"
 echo "=============================================="
 
 # Validate required variables
 if [ -z "${DB_HOST}" ] || [ -z "${DB_USER}" ] || [ -z "${DB_PASSWORD}" ] || [ -z "${DB_NAME}" ]; then
     echo "❌ ERROR: Missing required MySQL environment variables!"
-    echo "DB_HOST: ${DB_HOST:-NOT SET}"
-    echo "DB_USER: ${DB_USER:-NOT SET}"
-    echo "DB_PASSWORD: ${DB_PASSWORD:+SET}${DB_PASSWORD:-NOT SET}"
-    echo "DB_NAME: ${DB_NAME:-NOT SET}"
+    echo "Required: MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE"
+    exit 1
+fi
+
+if [ -z "${REDIS_CACHE_URL}" ] || [ -z "${REDIS_QUEUE_URL}" ]; then
+    echo "❌ ERROR: Missing required Redis environment variables!"
+    echo "Required: REDIS_CACHE, REDIS_QUEUE"
     exit 1
 fi
 
 # Wait for MySQL
-echo "--- Waiting for MySQL to be reachable ---"
-MAX_RETRIES=30
+echo "--- Waiting for MySQL at ${DB_HOST}:${DB_PORT} ---"
+MAX_RETRIES=60
 RETRY_COUNT=0
 while ! nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
     RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -55,48 +59,54 @@ while ! nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
 done
 echo "✅ MySQL is reachable!"
 
-# Verify DB connection
+# Test MySQL connection
 echo "--- Testing MySQL connection ---"
-if mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" --connect-timeout=10 -e "SELECT 1;" 2>/dev/null; then
-    echo "✅ MySQL connection verified!"
-else
+if ! mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" --connect-timeout=10 -e "SELECT 1;" 2>/dev/null; then
     echo "❌ MySQL connection failed!"
     echo "Connection details:"
     echo "  Host: ${DB_HOST}"
     echo "  Port: ${DB_PORT}"
     echo "  User: ${DB_USER}"
     echo "  Database: ${DB_NAME}"
-    echo ""
-    echo "Testing with verbose error output:"
-    mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT 1;" 2>&1 || true
     exit 1
 fi
+echo "✅ MySQL connection verified!"
 
 # Ensure database exists
 echo "--- Ensuring database exists ---"
-mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1
+mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" \
+    -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1
 echo "✅ Database ${DB_NAME} ready!"
 
+# Grant permissions if needed
+echo "--- Setting database permissions ---"
+mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" \
+    -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';" 2>/dev/null || true
+mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" \
+    -e "FLUSH PRIVILEGES;" 2>/dev/null || true
+
 # Wait for Redis services
-for redis_var in REDIS_CACHE REDIS_QUEUE REDIS_SOCKETIO; do
+for redis_var in REDIS_CACHE_URL REDIS_QUEUE_URL REDIS_SOCKETIO_URL; do
     redis_url="${!redis_var}"
-    echo "--- Waiting for $redis_var ---"
-    MAX_REDIS_RETRIES=30
+    redis_name="${redis_var%_URL}"
+    echo "--- Waiting for ${redis_name} ---"
+    MAX_REDIS_RETRIES=60
     REDIS_RETRY=0
     until redis-cli -u "${redis_url}" ping 2>/dev/null | grep -q PONG; do
         REDIS_RETRY=$((REDIS_RETRY + 1))
         if [ $REDIS_RETRY -ge $MAX_REDIS_RETRIES ]; then
-            echo "❌ ${redis_var} not reachable after $MAX_REDIS_RETRIES attempts"
+            echo "❌ ${redis_name} not reachable after $MAX_REDIS_RETRIES attempts"
             exit 1
         fi
-        echo "... waiting for ${redis_var} (attempt $REDIS_RETRY/$MAX_REDIS_RETRIES) ..."
+        echo "... waiting for ${redis_name} (attempt $REDIS_RETRY/$MAX_REDIS_RETRIES) ..."
         sleep 2
     done
-    echo "✅ ${redis_var} ready!"
+    echo "✅ ${redis_name} ready!"
 done
 
 echo "=============================================="
-echo "--- All services ready ---"
+echo "✅ All services ready!"
+echo "=============================================="
 
 cd /home/frappe/frappe-bench
 
@@ -107,15 +117,31 @@ echo "frappe" > sites/apps.txt
 echo "erpnext" >> sites/apps.txt
 
 # Fix permissions
+echo "--- Setting permissions ---"
 chown -R frappe:frappe /home/frappe/frappe-bench/sites
 
 # Check if site exists
-if [ -d "sites/${SITE_NAME}" ]; then
-    echo "--- Site ${SITE_NAME} already exists, starting bench ---"
+SITE_DIR="sites/${SITE_NAME}"
+if [ -d "${SITE_DIR}" ] && [ -f "${SITE_DIR}/site_config.json" ]; then
+    echo "--- Site ${SITE_NAME} exists, configuring ---"
+    
+    # Update site configuration
+    su - frappe -c "
+cd /home/frappe/frappe-bench && \
+bench --site \"${SITE_NAME}\" set-config db_host \"${DB_HOST}\" && \
+bench --site \"${SITE_NAME}\" set-config db_port ${DB_PORT} && \
+bench --site \"${SITE_NAME}\" set-config redis_cache \"${REDIS_CACHE_URL}\" && \
+bench --site \"${SITE_NAME}\" set-config redis_queue \"${REDIS_QUEUE_URL}\" && \
+bench --site \"${SITE_NAME}\" set-config redis_socketio \"${REDIS_SOCKETIO_URL}\"
+"
+    
+    echo "--- Starting bench ---"
     exec su - frappe -c "cd /home/frappe/frappe-bench && bench start"
 else
     echo "--- Creating new site: ${SITE_NAME} ---"
-    exec su - frappe -c "
+    
+    # Create new site
+    su - frappe -c "
 cd /home/frappe/frappe-bench && \
 bench new-site \"${SITE_NAME}\" \
   --db-type mysql \
@@ -126,11 +152,40 @@ bench new-site \"${SITE_NAME}\" \
   --mariadb-root-password \"${DB_PASSWORD}\" \
   --admin-password \"${ADMIN_PASSWORD}\" \
   --no-mariadb-socket \
-  --install-app erpnext \
-  --force && \
-echo '✅ Site created successfully!' && \
-bench --site \"${SITE_NAME}\" set-config db_host \"${DB_HOST}\" && \
-bench --site \"${SITE_NAME}\" set-config db_port ${DB_PORT} && \
-bench start
+  --force
 "
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ Site creation failed!"
+        exit 1
+    fi
+    
+    echo "✅ Site created successfully!"
+    
+    # Configure Redis
+    echo "--- Configuring Redis ---"
+    su - frappe -c "
+cd /home/frappe/frappe-bench && \
+bench --site \"${SITE_NAME}\" set-config redis_cache \"${REDIS_CACHE_URL}\" && \
+bench --site \"${SITE_NAME}\" set-config redis_queue \"${REDIS_QUEUE_URL}\" && \
+bench --site \"${SITE_NAME}\" set-config redis_socketio \"${REDIS_SOCKETIO_URL}\"
+"
+    
+    # Install ERPNext
+    echo "--- Installing ERPNext app ---"
+    su - frappe -c "
+cd /home/frappe/frappe-bench && \
+bench --site \"${SITE_NAME}\" install-app erpnext
+"
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ ERPNext installation failed!"
+        exit 1
+    fi
+    
+    echo "✅ ERPNext installed successfully!"
+    
+    # Start bench
+    echo "--- Starting bench ---"
+    exec su - frappe -c "cd /home/frappe/frappe-bench && bench start"
 fi
