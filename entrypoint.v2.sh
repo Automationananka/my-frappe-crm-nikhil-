@@ -1,5 +1,5 @@
 #!/bin/bash
-# Entrypoint for Railway Production with MySQL
+# Entrypoint v2 - Railway Production with MySQL (Optimized)
 set -e
 
 echo "🚀 Starting Frappe/ERPNext on Railway..."
