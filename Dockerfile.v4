@@ -13,18 +13,23 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     default-mysql-client \
     redis-tools \
-    netcat-openbsd && \
-    rm -rf /var/lib/apt/lists/*
+    netcat-openbsd \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the entrypoint script
+# Copy the entrypoint script (matching your filename)
 COPY entrypoint.v2.sh /entrypoint.v2.sh
 RUN chmod +x /entrypoint.v2.sh
 
 # Set working directory
 WORKDIR /home/frappe/frappe-bench
 
-# Expose port
+# Expose port (Railway will assign dynamically)
 EXPOSE 8000
 
-# Use CMD instead of ENTRYPOINT to avoid conflicts
-CMD ["/bin/bash", "/entrypoint.v2.sh"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000 || exit 1
+
+# Use the entrypoint script
+ENTRYPOINT ["/bin/bash", "/entrypoint.v2.sh"]
